@@ -1,3 +1,12 @@
+node_modules/
+
 allure-results/
 allure-report/
-node_modules/
+
+cypress/videos/
+cypress/screenshots/
+
+dist/
+coverage/
+
+.env
