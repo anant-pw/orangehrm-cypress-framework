@@ -1,0 +1,43 @@
+{
+  "name": "orangehrm-cypress-framework",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "cy:open": "cypress open",
+    "cy:run": "cypress run",
+    "cy:run:headed": "cypress run --headed --browser chrome",
+    "parallel": "cypress-parallel -s cy:run -t 2 -d cypress/e2e/smoke",
+    "parallel:headed": "cypress-parallel -s cy:run:headed -t 2 -d cypress/e2e/smoke",
+    "smoke": "cypress run --spec \"cypress/e2e/smoke/**/*.cy.ts\"",
+    "regression": "cypress run --spec \"cypress/e2e/regression/**/*.cy.ts\"",
+    "chrome": "cypress run --browser chrome",
+    "edge": "cypress run --browser edge",
+    "electron": "cypress run --browser electron",
+    "all": "cypress run",
+    "allure:generate": "allure generate allure-results --clean -o allure-report",
+    "allure:open": "allure open allure-report",
+    "report": "npm run allure:generate && npm run allure:open"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@shelex/cypress-allure-plugin": "^2.41.2",
+    "@types/node": "^26.1.0",
+    "allure-commandline": "^2.43.0",
+    "cypress": "^15.18.1",
+    "cypress-file-upload": "^5.0.8",
+    "cypress-parallel": "^0.15.0",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-cypress": "^6.4.2",
+    "prettier": "^3.9.4",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "mysql2": "^3.22.6"
+  }
+}
