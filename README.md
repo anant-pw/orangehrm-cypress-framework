@@ -1,75 +1,54 @@
-# Enterprise Cypress + TypeScript Automation Framework
+# Cypress + TypeScript Automation Framework
 
-An enterprise-grade UI automation framework built using **Cypress** and **TypeScript** following the **Page Object Model (POM)** with a centralized **ApplicationManager** architecture.
+A Cypress + TypeScript UI automation framework for the OrangeHRM demo app, using the Page Object Model with a thin `Application` access layer and separated Page/Validation classes.
 
 ---
 
-# Tech Stack
+## Tech Stack
 
-- Cypress
-- TypeScript
-- Page Object Model (POM)
-- ApplicationManager
-- Allure Reports
-- MySQL (via `cy.task`)
-- Git
+- Cypress 15 + TypeScript
+- Allure reporting (`@shelex/cypress-allure-plugin`)
+- `cypress-parallel` for parallel spec execution
+- MySQL (`mysql2`) via `cy.task`
 - GitHub Actions
-- Jenkins
-- Docker
 
 ---
 
-# Features
+## What's Actually Implemented
 
-- Page Object Model
-- Centralized ApplicationManager
-- Reusable UI Components
-- Environment-based execution
-- Smoke & Regression suites
-- Test Data Builders
-- Factories
-- Fixtures
-- Custom Commands
-- Hooks
-- MySQL Integration
-- File Upload & Download Utilities
-- Allure Reporting
-- Parallel Execution
-- Cross Browser Execution
-- Docker Support
-- GitHub Actions
-- Jenkins Pipeline
+- Page Object Model: `BasePage` → `LoginPage`, `DashboardPage`
+- Business-flow layer: `LoginFlow` (wraps `LoginPage`)
+- Assertions kept out of page objects, in a separate `Validations` layer (`DashboardValidation`)
+- Central `app` singleton (`cypress/core/index.ts`) as the single entry point into flows/validations
+- Per-environment config (`dev`, `qa`, `uat`, `production`) selected via `process.env.ENV`
+- MySQL query support wired through `cy.task("queryDatabase")` → `cypress/tasks/db.ts`
+- Allure reporting and `cypress-parallel` configured and runnable
+- GitHub Actions workflow running the smoke suite on push/PR
+
+**Test coverage today: 2 specs** — login success and dashboard header load. Everything above is proven only against those two flows.
 
 ---
 
-# Project Structure
+## Project Structure
 
 ```
 .
 ├── cypress
-│   ├── e2e
-│   │   ├── smoke
-│   │   └── regression
-│   │
+│   ├── e2e/smoke              # login.cy.ts, dashboard.cy.ts
+│   ├── core                   # Application.ts (entry point), index.ts (app singleton)
 │   ├── fixtures
-│   │
 │   ├── support
-│   │   ├── builders
-│   │   ├── components
-│   │   ├── database
-│   │   ├── factories
-│   │   ├── managers
-│   │   ├── pages
-│   │   ├── utils
-│   │   └── validations
-│   │
-│   ├── downloads
-│   ├── screenshots
-│   └── videos
-│
-├── config
-├── Dockerfile
-├── docker-compose.yml
+│   │   ├── pages               # BasePage, LoginPage, DashboardPage
+│   │   ├── flows                # LoginFlow
+│   │   ├── components           # Table, Dropdown, Modal, DatePicker, FileUpload
+│   │   ├── api                  # ApiClient, ApiManager, AuthApi
+│   │   ├── factories             # EmployeeFactory, EmployeeBuilder
+│   │   └── managers              # ApplicationManager (not currently used by any spec)
+│   ├── validations              # DashboardValidation
+│   ├── utils                    # Database, FileUtils, Logger
+│   └── tasks                    # db.ts (MySQL query executor)
+├── config                       # config.ts, environment.ts, environments/{dev,qa,uat,production}.ts
+├── .github/workflows/cypress.yml
 ├── cypress.config.ts
 ├── package.json
 └── tsconfig.json
@@ -77,487 +56,127 @@ An enterprise-grade UI automation framework built using **Cypress** and **TypeSc
 
 ---
 
-# Framework Architecture
-
-```
-Spec File
-     │
-     ▼
-ApplicationManager
-     │
-     ▼
-Page Objects
-     │
-     ▼
-Reusable Components
-     │
-     ▼
-Cypress Commands
-     │
-     ▼
-Application
-```
-
----
-
-# Installation
-
-Clone the repository
-
-```bash
-git clone <repository-url>
-```
-
-Install dependencies
+## Installation
 
 ```bash
 npm install
-```
-
-Install Cypress
-
-```bash
 npx cypress install
 ```
 
----
-
-# Running Tests
-
-## Open Cypress
+## Running Tests
 
 ```bash
-npx cypress open
+npx cypress open                 # interactive
+npx cypress run                  # all specs
+npm run smoke                    # cypress/e2e/smoke/**/*.cy.ts (the only suite that exists)
+npm run parallel                 # smoke suite via cypress-parallel, 2 threads
+npx cypress run --browser chrome # or firefox / edge
 ```
 
-## Run All Tests
+## Environment Configuration
 
 ```bash
-npx cypress run
+ENV=qa npx cypress run
 ```
 
-## Run Smoke Suite
-
-```bash
-npx cypress run --spec "cypress/e2e/smoke/**/*.cy.ts"
-```
-
-## Run Regression Suite
-
-```bash
-npx cypress run --spec "cypress/e2e/regression/**/*.cy.ts"
-```
-
-## Run Specific Test
-
-```bash
-npx cypress run --spec "cypress/e2e/smoke/login.cy.ts"
-```
+Environments live in `config/environments/*.ts` and are selected in `config/config.ts` via `process.env.ENV` (defaults to `qa`).
 
 ---
 
-# Cross Browser Execution
-
-Chrome
-
-```bash
-npx cypress run --browser chrome
-```
-
-Firefox
-
-```bash
-npx cypress run --browser firefox
-```
-
-Edge
-
-```bash
-npx cypress run --browser edge
-```
-
----
-
-# Parallel Execution
-
-```bash
-npm run parallel
-```
-
----
-
-# Environment Configuration
-
-Example:
-
-```
-config/
-    qa.json
-    stage.json
-    prod.json
-```
-
-Run using
-
-```bash
-npx cypress run --env config=qa
-```
-
----
-
-# Writing a Test
-
-Example
+## Writing a Test
 
 ```typescript
+import { app } from "../../core";
+
 describe("Login", () => {
+  beforeEach(() => cy.visit("/"));
 
-    beforeEach(() => {
-        cy.visit("/");
-    });
-
-    it("Login as Admin", () => {
-
-        app.login.loginAsAdmin();
-
-    });
-
+  it("Admin can login successfully", () => {
+    app.login.loginAsAdmin();
+    app.dashboard.verifyDashboardLoaded();
+  });
 });
 ```
 
-Tests should contain only business flow.
+Tests call only `app.<flow>.<method>()` — no direct page-object instantiation, no assertions inside flows.
 
 ---
 
-# ApplicationManager
+## Architecture
 
-Access all pages through the ApplicationManager.
+```
+Spec
+  │
+  ▼
+app (Application singleton)
+  │
+  ▼
+Flow / Validation classes
+  │
+  ▼
+Page Objects (extend BasePage)
+  │
+  ▼
+Cypress commands
+  │
+  ▼
+OrangeHRM demo app
+```
 
-Example
+Rules:
+- Page objects hold locators + actions only, no assertions.
+- Assertions live in `Validations` classes.
+- Tests read as business flow (`app.login.loginAsAdmin()`), not raw Cypress calls.
+
+---
+
+## Database Queries
 
 ```typescript
-app.login.loginAsAdmin();
-
-app.dashboard.verifyDashboard();
-
-app.user.addUser();
+Database.query("SELECT * FROM hs_hr_employee");
 ```
 
-Avoid creating page objects manually.
+Executes via `cy.task("queryDatabase")`, configured in `cypress.config.ts`, implemented in `cypress/tasks/db.ts`. Not currently called from any spec — verified working at the plumbing level only.
 
 ---
 
-# Page Objects
-
-Responsibilities
-
-- Locators
-- User actions
-
-Example
-
-```typescript
-login(username, password)
-
-logout()
-
-clickLogin()
-```
-
-Do **not** place assertions inside page objects.
-
----
-
-# Validations
-
-Store assertions separately.
-
-Example
-
-```typescript
-loginValidation.verifyLoginSuccess();
-
-dashboardValidation.verifyDashboard();
-```
-
----
-
-# Reusable Components
-
-The framework contains reusable components for commonly used UI controls.
-
-- Table
-- Dropdown
-- Modal
-- DatePicker
-- FileUpload
-
-Example
-
-```typescript
-dropdown.select("Admin");
-
-table.selectRow(2);
-```
-
----
-
-# Test Data Management
-
-## Fixtures
-
-Static JSON data
-
-```typescript
-cy.fixture("login");
-```
-
----
-
-## Builders
-
-Create custom objects.
-
-```typescript
-UserBuilder()
-    .withName("John")
-    .withRole("Admin")
-    .build();
-```
-
----
-
-## Factories
-
-Generate predefined objects.
-
-```typescript
-UserFactory.admin();
-
-UserFactory.employee();
-```
-
----
-
-# Database Support
-
-Database operations are executed using `cy.task()`.
-
-Example
-
-```typescript
-cy.task("executeQuery", query);
-
-cy.task("insertUser", user);
-```
-
----
-
-# File Upload
-
-Example
-
-```typescript
-uploadFile();
-```
-
----
-
-# File Download Verification
-
-Example
-
-```typescript
-verifyDownloadedFile();
-```
-
----
-
-# Reporting
-
-Execute tests
-
-```bash
-npx cypress run
-```
-
-Generate report
+## Reporting
 
 ```bash
 npm run allure:generate
-```
-
-Open report
-
-```bash
 npm run allure:open
 ```
 
 ---
 
-# Docker
+## CI
 
-Build image
-
-```bash
-docker build -t orangehrm-cypress .
-```
-
-Run container
-
-```bash
-docker run --rm orangehrm-cypress
-```
-
-Using Docker Compose
-
-```bash
-docker compose up
-```
+`.github/workflows/cypress.yml` runs on push to `main` and on PRs: checkout → install → `cypress install` → `npm run smoke`. No regression job, no Docker step, no artifact upload configured yet.
 
 ---
 
-# Git Workflow
+## Built But Not Yet Wired Into Any Test
 
-```bash
-git add .
+These exist in the codebase and are implemented, but no spec currently exercises them. Treat as scaffolding, not proven functionality:
 
-git commit -m "message"
+- `EmployeeListPage`, `EmployeePage` (page objects for employee list/detail screens)
+- `EmployeeFactory`, `EmployeeBuilder` (test data generation)
+- `Table`, `Dropdown`, `Modal`, `DatePicker`, `FileUpload` (reusable UI components)
+- `ApiClient`, `ApiManager`, `AuthApi` (API-layer request helpers)
+- `ApplicationManager` (a second, unused access-point pattern — superseded by `core/Application.ts`; should be deleted or merged, not left as a parallel path)
 
-git push
-```
+## Not Present
 
----
-
-# CI/CD
-
-## GitHub Actions
-
-Pipeline
-
-```
-Checkout
-
-↓
-
-Install Dependencies
-
-↓
-
-Run Cypress Tests
-
-↓
-
-Generate Allure Report
-
-↓
-
-Upload Artifacts
-```
-
-## Jenkins
-
-Pipeline
-
-```
-Checkout
-
-↓
-
-Install Dependencies
-
-↓
-
-Run Cypress
-
-↓
-
-Generate Allure Report
-
-↓
-
-Archive Reports
-```
+- Regression suite (`cypress/e2e/regression` referenced in `package.json` scripts but does not exist)
+- Docker / docker-compose
+- Jenkins pipeline
+- Cross-browser CI matrix (Chrome/Firefox/Edge scripts exist locally but CI only runs default Electron/Chrome)
 
 ---
 
-# Adding a New Page
+## Adding a New Page
 
-1. Create a Page Object.
-2. Add locators.
-3. Add page methods.
-4. Register the page in `ApplicationManager`.
-5. Access it using:
-
-```typescript
-app.newPage.someMethod();
-```
-
----
-
-# Adding a New Test
-
-1. Create a new spec under:
-
-```
-cypress/e2e/smoke
-```
-
-or
-
-```
-cypress/e2e/regression
-```
-
-2. Implement business flow.
-
-```typescript
-app.login.loginAsAdmin();
-
-app.user.addUser();
-```
-
-3. Validate expected results.
-
----
-
-# Best Practices
-
-- Keep tests readable.
-- Store actions inside page objects.
-- Store assertions inside validation classes.
-- Reuse common UI components.
-- Avoid duplicate locators.
-- Use builders and factories for test data.
-- Keep tests independent.
-- Use environment-specific configuration.
-- Use `cy.session()` for faster authenticated tests.
-
----
-
-# Framework Flow
-
-```
-Spec
-   │
-   ▼
-ApplicationManager
-   │
-   ▼
-Page Objects
-   │
-   ▼
-Reusable Components
-   │
-   ▼
-Cypress
-   │
-   ▼
-Application
-```
-
----
-
-# Author
-
-Enterprise Cypress + TypeScript Automation Framework
+1. Create a page object extending `BasePage` under `cypress/support/pages`.
+2. Add a `Flow` or `Validation` class that uses it.
+3. Register the flow/validation on `Application` (`cypress/core/Application.ts`).
+4. Access it via `app.<name>.<method>()`.
