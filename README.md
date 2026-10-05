@@ -1,5 +1,7 @@
 # Cypress + TypeScript Automation Framework
 
+> **Learning project.** A personal Cypress + TypeScript exercise against a public demo site, not maintained.
+
 A Cypress + TypeScript UI automation framework for the OrangeHRM demo app, using the Page Object Model with a thin `Application` access layer and separated Page/Validation classes.
 
 ---
